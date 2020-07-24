@@ -306,7 +306,7 @@ namespace BTCPayServer.Controllers
                 return BadRequest("No unpaid pending invoice to cancel");
             }
 
-            await _InvoiceRepository.UpdateInvoiceStatus(invoice.Id, InvoiceStatus.Invalid);
+            await _InvoiceRepository.MarkInvoiceStatus(invoice.Id, InvoiceStatus.Invalid);
             _EventAggregator.Publish(new InvoiceEvent(await _InvoiceRepository.GetInvoice(invoice.Id), 1008,
                 InvoiceEvent.MarkedInvalid));
 
