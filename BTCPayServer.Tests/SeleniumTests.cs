@@ -375,8 +375,8 @@ namespace BTCPayServer.Tests
                 s.Driver.FindElement(By.Id("Apps")).Click();
                 s.Driver.FindElement(By.Id("CreateNewApp")).Click();
                 s.Driver.FindElement(By.Name("Name")).SendKeys("PoS" + Guid.NewGuid());
-                s.Driver.FindElement(By.Id("SelectedAppType")).SendKeys("PointOfSale" + Keys.Enter);
-                s.Driver.FindElement(By.Id("SelectedStore")).SendKeys(store + Keys.Enter);
+                s.Driver.FindElement(By.Id("SelectedAppType")).SendKeys("PointOfSale");
+                s.Driver.FindElement(By.Id("SelectedStore")).SendKeys(store.storeName);
                 s.Driver.FindElement(By.Id("Create")).Click();
                 s.Driver.FindElement(By.Id("DefaultView")).SendKeys("Cart" + Keys.Enter);
                 s.Driver.FindElement(By.Id("SaveSettings")).ForceClick();
@@ -409,8 +409,8 @@ namespace BTCPayServer.Tests
                 s.Driver.FindElement(By.Id("Apps")).Click();
                 s.Driver.FindElement(By.Id("CreateNewApp")).Click();
                 s.Driver.FindElement(By.Name("Name")).SendKeys("CF" + Guid.NewGuid());
-                s.Driver.FindElement(By.Id("SelectedAppType")).SendKeys("Crowdfund" + Keys.Enter);
-                s.Driver.FindElement(By.Id("SelectedStore")).SendKeys(store + Keys.Enter);
+                s.Driver.FindElement(By.Id("SelectedAppType")).SendKeys("Crowdfund");
+                s.Driver.FindElement(By.Id("SelectedStore")).SendKeys(store.storeName);
                 s.Driver.FindElement(By.Id("Create")).Click();
                 s.Driver.FindElement(By.Id("Title")).SendKeys("Kukkstarter");
                 s.Driver.FindElement(By.CssSelector("div.note-editable.card-block")).SendKeys("1BTC = 1BTC");
