@@ -97,42 +97,38 @@ namespace BTCPayServer.Controllers
                                                         string choiceKey,
                                                         string posData = null, CancellationToken cancellationToken = default)
         {
-            var app = await _AppService.GetApp(appId, AppType.PointOfSale);
             if (string.IsNullOrEmpty(choiceKey) && amount <= 0)
             {
                 return RedirectToAction(nameof(ViewPointOfSale), new { appId = appId });
             }
+
+            var app = await _AppService.GetApp(appId, AppType.PointOfSale);
             if (app == null)
                 return NotFound();
+
             var settings = app.GetSettings<PointOfSaleSettings>();
             settings.DefaultView = settings.EnableShoppingCart ? PosViewType.Cart : settings.DefaultView;
             if (string.IsNullOrEmpty(choiceKey) && !settings.ShowCustomAmount && settings.DefaultView != PosViewType.Cart)
             {
                 return RedirectToAction(nameof(ViewPointOfSale), new { appId = appId, viewType = viewType });
             }
+
             string title = null;
             var price = 0.0m;
             Dictionary<string, InvoiceSupportedTransactionCurrency> paymentMethods = null;
             ViewPointOfSaleViewModel.Item choice = null;
             if (!string.IsNullOrEmpty(choiceKey))
             {
-                var choices = _AppService.Parse(settings.Template, settings.Currency);
-                choice = choices.FirstOrDefault(c => c.Id == choiceKey);
+                choice = _AppService.Parse(settings.Template, settings.Currency).FirstOrDefault(c => c.Id == choiceKey);
                 if (choice == null)
                     return NotFound();
-                title = choice.Title;
-                price = choice.Price.Value;
-                if (amount > price)
-                    price = amount;
-
-                if (choice.Inventory.HasValue)
-                {
-                    if (choice.Inventory <= 0)
-                    {
-                        return RedirectToAction(nameof(ViewPointOfSale), new { appId = appId });
-                    }
+                if (choice.Inventory.HasValue && choice.Inventory <= 0)
+                {    
+                    return RedirectToAction(nameof(ViewPointOfSale), new { appId = appId });   
                 }
 
+                title = choice.Title;
+                price = amount > price ? amount : choice.Price.Value;
                 if (choice?.PaymentMethods?.Any() is true)
                 {
                     paymentMethods = choice?.PaymentMethods.ToDictionary(s => s,
@@ -143,8 +139,6 @@ namespace BTCPayServer.Controllers
             {
                 if (!settings.ShowCustomAmount && settings.DefaultView != PosViewType.Cart)
                     return NotFound();
-                price = amount;
-                title = settings.Title;
 
                 //if cart IS enabled and we detect posdata that matches the cart system's, check inventory for the items
                 if (!string.IsNullOrEmpty(posData) &&
@@ -163,7 +157,7 @@ namespace BTCPayServer.Controllers
                         {
                             switch (itemChoice.Inventory)
                             {
-                                case int i when i <= 0:
+                                case int inventory when inventory <= 0:
                                     return RedirectToAction(nameof(ViewPointOfSale), new { appId });
                                 case int inventory when inventory < cartItem.Value:
                                     return RedirectToAction(nameof(ViewPointOfSale), new { appId });
@@ -171,7 +165,11 @@ namespace BTCPayServer.Controllers
                         }
                     }
                 }
+
+                price = amount;
+                title = settings.Title;
             }
+
             var store = await _AppService.GetStore(app);
             try
             {
