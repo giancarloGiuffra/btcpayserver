@@ -251,6 +251,7 @@ namespace BTCPayServer.Hosting
             services.TryAddScoped<IHttpContextAccessor, HttpContextAccessor>();
             services.AddTransient<AccessTokenController>();
             services.AddTransient<InvoiceController>();
+            services.AddTransient<InvoiceService>();
             services.AddTransient<AppsPublicController>();
             services.AddTransient<PaymentRequestController>();
             // Add application services.
