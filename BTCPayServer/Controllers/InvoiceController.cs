@@ -77,11 +77,10 @@ namespace BTCPayServer.Controllers
             invoice.Currency = invoice.Currency?.ToUpperInvariant() ?? "USD";
             InvoiceLogs logs = new InvoiceLogs();
             logs.Write("Creation of invoice starting");
-            var entity = _InvoiceRepository.CreateNewInvoice();
 
+            var entity = _InvoiceRepository.CreateNewInvoice();
             var getAppsTaggingStore = _InvoiceRepository.GetAppsTaggingStore(store.Id);
             var storeBlob = store.GetStoreBlob();
-            EmailAddressAttribute emailValidator = new EmailAddressAttribute();
             entity.ExpirationTime = invoice.ExpirationTime is DateTimeOffset v ? v : entity.InvoiceTime.AddMinutes(storeBlob.InvoiceExpiration);
             if (entity.ExpirationTime - TimeSpan.FromSeconds(30.0) < entity.InvoiceTime)
             {
@@ -107,8 +106,7 @@ namespace BTCPayServer.Controllers
                 entity.RefundMail = entity.BuyerInformation.BuyerEmail;
             }
 
-            var taxIncluded = invoice.TaxIncluded.HasValue ? invoice.TaxIncluded.Value : 0m;
-
+            var taxIncluded = invoice.TaxIncluded ?? 0m;
             var currencyInfo = _CurrencyNameTable.GetNumberFormatInfo(invoice.Currency, false);
             if (currencyInfo != null)
             {
@@ -122,19 +120,11 @@ namespace BTCPayServer.Controllers
             invoice.TaxIncluded = Math.Min(taxIncluded, invoice.Price);
 
             entity.ProductInformation = Map<CreateInvoiceRequest, ProductInformation>(invoice);
-
-
             entity.RedirectURLTemplate = invoice.RedirectURL ?? store.StoreWebsite;
-
             entity.RedirectAutomatically =
                 invoice.RedirectAutomatically.GetValueOrDefault(storeBlob.RedirectAutomatically);
-
             entity.Status = InvoiceStatus.New;
             entity.SpeedPolicy = ParseSpeedPolicy(invoice.TransactionSpeed, store.SpeedPolicy);
-
-            HashSet<CurrencyPair> currencyPairsToFetch = new HashSet<CurrencyPair>();
-            var rules = storeBlob.GetRateRules(_NetworkProvider);
-            var excludeFilter = storeBlob.GetExcludedPaymentMethods(); // Here we can compose filters from other origin with PaymentFilter.Any()
 
             if (invoice.PaymentCurrencies?.Any() is true)
             {
@@ -146,58 +136,17 @@ namespace BTCPayServer.Controllers
                         new InvoiceSupportedTransactionCurrency() { Enabled = true });
                 }
             }
-            if (invoice.SupportedTransactionCurrencies != null && invoice.SupportedTransactionCurrencies.Count != 0)
-            {
-                var supportedTransactionCurrencies = invoice.SupportedTransactionCurrencies
-                                                            .Where(c => c.Value.Enabled)
-                                                            .Select(c => PaymentMethodId.TryParse(c.Key, out var p) ? p : null)
-                                                            .ToHashSet();
-                excludeFilter = PaymentFilter.Or(excludeFilter,
-                                                 PaymentFilter.Where(p => !supportedTransactionCurrencies.Contains(p)));
-            }
 
-            foreach (var network in store.GetSupportedPaymentMethods(_NetworkProvider)
-                                                .Where(s => !excludeFilter.Match(s.PaymentId))
-                                                .Select(c => _NetworkProvider.GetNetwork<BTCPayNetworkBase>(c.PaymentId.CryptoCode))
-                                                .Where(c => c != null))
-            {
-                currencyPairsToFetch.Add(new CurrencyPair(network.CryptoCode, invoice.Currency));
-                //TODO: abstract
-                if (storeBlob.LightningMaxValue != null)
-                    currencyPairsToFetch.Add(new CurrencyPair(network.CryptoCode, storeBlob.LightningMaxValue.Currency));
-                if (storeBlob.OnChainMinValue != null)
-                    currencyPairsToFetch.Add(new CurrencyPair(network.CryptoCode, storeBlob.OnChainMinValue.Currency));
-            }
-
+            var excludeFilter = BuildExcludeFilter(invoice, storeBlob);
+            var currencyPairsToFetch = GetCurrencyPairs(invoice, store, storeBlob, excludeFilter);
             var rateRules = storeBlob.GetRateRules(_NetworkProvider);
             var fetchingByCurrencyPair = _RateProvider.FetchRates(currencyPairsToFetch, rateRules, cancellationToken);
             var fetchingAll = WhenAllFetched(logs, fetchingByCurrencyPair);
-
-            var supportedPaymentMethods = store.GetSupportedPaymentMethods(_NetworkProvider)
-                                               .Where(s => !excludeFilter.Match(s.PaymentId) && _paymentMethodHandlerDictionary.Support(s.PaymentId))
-                                               .Select(c =>
-                                                (Handler: _paymentMethodHandlerDictionary[c.PaymentId],
-                                                SupportedPaymentMethod: c,
-                                                Network: _NetworkProvider.GetNetwork<BTCPayNetworkBase>(c.PaymentId.CryptoCode)))
-                                                .Where(c => c.Network != null)
-                                                .Select(o =>
-                                                    (SupportedPaymentMethod: o.SupportedPaymentMethod,
-                                                    PaymentMethod: CreatePaymentMethodAsync(fetchingByCurrencyPair, o.Handler, o.SupportedPaymentMethod, o.Network, entity, store, logs)))
-                                                .ToList();
-            List<ISupportedPaymentMethod> supported = new List<ISupportedPaymentMethod>();
-            var paymentMethods = new PaymentMethodDictionary();
-            foreach (var o in supportedPaymentMethods)
-            {
-                var paymentMethod = await o.PaymentMethod;
-                if (paymentMethod == null)
-                    continue;
-                supported.Add(o.SupportedPaymentMethod);
-                paymentMethods.Add(paymentMethod);
-            }
+            var (supported, paymentMethods) = await GetSupportedPaymentMethodsAsync(store, entity, excludeFilter, fetchingByCurrencyPair, logs);
 
             if (supported.Count == 0)
             {
-                StringBuilder errors = new StringBuilder();
+                var errors = new StringBuilder();
                 if (!store.GetSupportedPaymentMethods(_NetworkProvider).Any())
                     errors.AppendLine("Warning: No wallet has been linked to your BTCPay Store. See the following link for more information on how to connect your store and wallet. (https://docs.btcpayserver.org/WalletSetup/)");
                 foreach (var error in logs.ToList())
@@ -233,8 +182,73 @@ namespace BTCPayServer.Controllers
                 await _InvoiceRepository.AddInvoiceLogs(entity.Id, logs);
             });
             _EventAggregator.Publish(new Events.InvoiceEvent(entity, 1001, InvoiceEvent.Created));
-            var resp = entity.EntityToDTO();
-            return new DataWrapper<InvoiceResponse>(resp) { Facade = "pos/invoice" };
+            return new DataWrapper<InvoiceResponse>(entity.EntityToDTO()) { Facade = "pos/invoice" };
+        }
+
+        private static IPaymentFilter BuildExcludeFilter(CreateInvoiceRequest invoice, StoreBlob storeBlob)
+        {
+            var excludeFilter = storeBlob.GetExcludedPaymentMethods(); // Here we can compose filters from other origin with PaymentFilter.Any()
+            if (invoice.SupportedTransactionCurrencies != null && invoice.SupportedTransactionCurrencies.Count != 0)
+            {
+                var supportedTransactionCurrencies = invoice.SupportedTransactionCurrencies
+                                                            .Where(c => c.Value.Enabled)
+                                                            .Select(c => PaymentMethodId.TryParse(c.Key, out var p) ? p : null)
+                                                            .ToHashSet();
+                excludeFilter = PaymentFilter.Or(excludeFilter,
+                                                 PaymentFilter.Where(p => !supportedTransactionCurrencies.Contains(p)));
+            }
+
+            return excludeFilter;
+        }
+
+        private async Task<(List<ISupportedPaymentMethod>, PaymentMethodDictionary)> GetSupportedPaymentMethodsAsync(
+            StoreData store,
+            InvoiceEntity entity,
+            IPaymentFilter excludeFilter,
+            Dictionary<CurrencyPair, Task<RateResult>> fetchingByCurrencyPair,
+            InvoiceLogs logs)
+        {
+            var supported = new List<ISupportedPaymentMethod>();
+            var paymentMethods = new PaymentMethodDictionary();
+            var supportedPaymentMethods = store.GetSupportedPaymentMethods(_NetworkProvider)
+                                               .Where(s => !excludeFilter.Match(s.PaymentId) && _paymentMethodHandlerDictionary.Support(s.PaymentId))
+                                               .Select(c =>
+                                                (Handler: _paymentMethodHandlerDictionary[c.PaymentId],
+                                                SupportedPaymentMethod: c,
+                                                Network: _NetworkProvider.GetNetwork<BTCPayNetworkBase>(c.PaymentId.CryptoCode)))
+                                                .Where(c => c.Network != null)
+                                                .Select(o =>
+                                                    (SupportedPaymentMethod: o.SupportedPaymentMethod,
+                                                    PaymentMethod: CreatePaymentMethodAsync(fetchingByCurrencyPair, o.Handler, o.SupportedPaymentMethod, o.Network, entity, store, logs)))
+                                                .ToList();
+            foreach (var o in supportedPaymentMethods)
+            {
+                var paymentMethod = await o.PaymentMethod;
+                if (paymentMethod == null)
+                    continue;
+                supported.Add(o.SupportedPaymentMethod);
+                paymentMethods.Add(paymentMethod);
+            }
+            return (supported, paymentMethods);
+        }
+
+        private HashSet<CurrencyPair> GetCurrencyPairs(CreateInvoiceRequest invoice, StoreData store, StoreBlob storeBlob, IPaymentFilter excludeFilter)
+        {
+            var currencyPairsToFetch = new HashSet<CurrencyPair>();
+            foreach (var network in store.GetSupportedPaymentMethods(_NetworkProvider)
+                                         .Where(s => !excludeFilter.Match(s.PaymentId))
+                                         .Select(c => _NetworkProvider.GetNetwork<BTCPayNetworkBase>(c.PaymentId.CryptoCode))
+                                         .Where(c => c != null))
+            {
+                currencyPairsToFetch.Add(new CurrencyPair(network.CryptoCode, invoice.Currency));
+                //TODO: abstract
+                if (storeBlob.LightningMaxValue != null)
+                    currencyPairsToFetch.Add(new CurrencyPair(network.CryptoCode, storeBlob.LightningMaxValue.Currency));
+                if (storeBlob.OnChainMinValue != null)
+                    currencyPairsToFetch.Add(new CurrencyPair(network.CryptoCode, storeBlob.OnChainMinValue.Currency));
+            }
+
+            return currencyPairsToFetch;
         }
 
         private Task WhenAllFetched(InvoiceLogs logs, Dictionary<CurrencyPair, Task<RateResult>> fetchingByCurrencyPair)
