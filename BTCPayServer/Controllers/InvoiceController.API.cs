@@ -16,13 +16,13 @@ namespace BTCPayServer.Controllers
     [Authorize(Policies.CanCreateInvoice, AuthenticationSchemes = AuthenticationSchemes.Bitpay)]
     public class InvoiceControllerAPI : Controller
     {
-        private readonly InvoiceController _InvoiceController;
+        private readonly InvoiceService _InvoiceService;
         private readonly InvoiceRepository _InvoiceRepository;
 
-        public InvoiceControllerAPI(InvoiceController invoiceController,
+        public InvoiceControllerAPI(InvoiceService invoiceService,
                                     InvoiceRepository invoiceRepository)
         {
-            _InvoiceController = invoiceController;
+            _InvoiceService = invoiceService;
             _InvoiceRepository = invoiceRepository;
         }
 
@@ -33,7 +33,7 @@ namespace BTCPayServer.Controllers
         {
             if (invoice == null)
                 throw new BitpayHttpException(400, "Invalid invoice");
-            return await _InvoiceController.CreateInvoiceCore(invoice, HttpContext.GetStoreData(), HttpContext.Request.GetAbsoluteRoot(), cancellationToken: cancellationToken);
+            return await _InvoiceService.CreateInvoiceCore(invoice, HttpContext.GetStoreData(), HttpContext.Request.GetAbsoluteRoot(), cancellationToken: cancellationToken);
         }
 
         [HttpGet]

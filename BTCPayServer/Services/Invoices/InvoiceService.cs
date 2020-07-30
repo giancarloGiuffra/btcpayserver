@@ -45,7 +45,7 @@ namespace BTCPayServer.Services.Invoices
             _paymentMethodHandlerDictionary = paymentMethodHandlerDictionary;
         }
 
-        internal async Task<DataWrapper<InvoiceResponse>> CreateInvoiceCore(CreateInvoiceRequest invoice, StoreData store, string serverUrl, List<string> additionalTags, CancellationToken cancellationToken)
+        internal async Task<DataWrapper<InvoiceResponse>> CreateInvoiceCore(CreateInvoiceRequest invoice, StoreData store, string serverUrl, List<string> additionalTags = null, CancellationToken cancellationToken = default)
         {
             invoice.Currency = invoice.Currency?.ToUpperInvariant() ?? "USD";
             var logs = new InvoiceLogs();

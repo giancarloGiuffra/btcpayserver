@@ -5,6 +5,7 @@ using System.Web;
 using BTCPayServer.Data;
 using BTCPayServer.Models;
 using BTCPayServer.Models.StoreViewModels;
+using BTCPayServer.Services.Invoices;
 using BTCPayServer.Services.Stores;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
@@ -13,15 +14,14 @@ namespace BTCPayServer.Controllers
 {
     public class PublicController : Controller
     {
-        public PublicController(InvoiceController invoiceController,
-            StoreRepository storeRepository)
+        public PublicController(StoreRepository storeRepository, InvoiceService invoiceService)
         {
-            _InvoiceController = invoiceController;
             _StoreRepository = storeRepository;
+            _InvoiceService = invoiceService;
         }
 
-        private readonly InvoiceController _InvoiceController;
         private readonly StoreRepository _StoreRepository;
+        private readonly InvoiceService _InvoiceService;
 
         [HttpGet]
         [IgnoreAntiforgeryToken]
@@ -57,7 +57,7 @@ namespace BTCPayServer.Controllers
             DataWrapper<InvoiceResponse> invoice = null;
             try
             {
-                invoice = await _InvoiceController.CreateInvoiceCore(new CreateInvoiceRequest()
+                invoice = await _InvoiceService.CreateInvoiceCore(new CreateInvoiceRequest()
                 {
                     Price = model.Price,
                     Currency = model.Currency,

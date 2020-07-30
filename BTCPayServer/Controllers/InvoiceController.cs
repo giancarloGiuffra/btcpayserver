@@ -1,25 +1,12 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using BTCPayServer.Client.Models;
 using BTCPayServer.Data;
 using BTCPayServer.HostedServices;
-using BTCPayServer.Logging;
-using BTCPayServer.Models;
-using BTCPayServer.Payments;
-using BTCPayServer.Rating;
 using BTCPayServer.Security;
 using BTCPayServer.Services.Invoices;
 using BTCPayServer.Services.Rates;
 using BTCPayServer.Services.Stores;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using NBitpayClient;
-using Newtonsoft.Json;
-using CreateInvoiceRequest = BTCPayServer.Models.CreateInvoiceRequest;
-using StoreData = BTCPayServer.Data.StoreData;
 
 namespace BTCPayServer.Controllers
 {
@@ -37,11 +24,9 @@ namespace BTCPayServer.Controllers
         private readonly PaymentMethodHandlerDictionary _paymentMethodHandlerDictionary;
         private readonly ApplicationDbContextFactory _dbContextFactory;
         private readonly PullPaymentHostedService _paymentHostedService;
-        readonly IServiceProvider _ServiceProvider;
         private readonly InvoiceService _InvoiceService;
 
         public InvoiceController(
-            IServiceProvider serviceProvider,
             InvoiceRepository invoiceRepository,
             CurrencyNameTable currencyNameTable,
             UserManager<ApplicationUser> userManager,
@@ -55,7 +40,6 @@ namespace BTCPayServer.Controllers
             PullPaymentHostedService paymentHostedService,
             InvoiceService invoiceService)
         {
-            _ServiceProvider = serviceProvider;
             _CurrencyNameTable = currencyNameTable ?? throw new ArgumentNullException(nameof(currencyNameTable));
             _StoreRepository = storeRepository ?? throw new ArgumentNullException(nameof(storeRepository));
             _InvoiceRepository = invoiceRepository ?? throw new ArgumentNullException(nameof(invoiceRepository));
@@ -68,11 +52,6 @@ namespace BTCPayServer.Controllers
             _paymentHostedService = paymentHostedService;
             _CSP = csp;
             _InvoiceService = invoiceService;
-        }
-
-        internal async Task<DataWrapper<InvoiceResponse>> CreateInvoiceCore(CreateInvoiceRequest invoice, StoreData store, string serverUrl, List<string> additionalTags = null, CancellationToken cancellationToken = default)
-        {
-            return await _InvoiceService.CreateInvoiceCore(invoice, store, serverUrl, additionalTags, cancellationToken);
         }
     }
 }

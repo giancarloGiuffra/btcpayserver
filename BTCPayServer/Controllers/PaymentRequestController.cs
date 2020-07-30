@@ -26,7 +26,6 @@ namespace BTCPayServer.Controllers
     [Authorize(AuthenticationSchemes = AuthenticationSchemes.Cookie)]
     public class PaymentRequestController : Controller
     {
-        private readonly InvoiceController _InvoiceController;
         private readonly UserManager<ApplicationUser> _UserManager;
         private readonly StoreRepository _StoreRepository;
         private readonly PaymentRequestRepository _PaymentRequestRepository;
@@ -35,9 +34,9 @@ namespace BTCPayServer.Controllers
         private readonly CurrencyNameTable _Currencies;
         private readonly InvoiceRepository _InvoiceRepository;
         private readonly LinkGenerator _linkGenerator;
+        private readonly InvoiceService _InvoiceService;
 
         public PaymentRequestController(
-            InvoiceController invoiceController,
             UserManager<ApplicationUser> userManager,
             StoreRepository storeRepository,
             PaymentRequestRepository paymentRequestRepository,
@@ -45,9 +44,9 @@ namespace BTCPayServer.Controllers
             EventAggregator eventAggregator,
             CurrencyNameTable currencies,
             InvoiceRepository invoiceRepository,
-            LinkGenerator linkGenerator)
+            LinkGenerator linkGenerator,
+            InvoiceService invoiceService)
         {
-            _InvoiceController = invoiceController;
             _UserManager = userManager;
             _StoreRepository = storeRepository;
             _PaymentRequestRepository = paymentRequestRepository;
@@ -56,6 +55,7 @@ namespace BTCPayServer.Controllers
             _Currencies = currencies;
             _InvoiceRepository = invoiceRepository;
             _linkGenerator = linkGenerator;
+            _InvoiceService = invoiceService;
         }
 
         [HttpGet]
@@ -257,7 +257,7 @@ namespace BTCPayServer.Controllers
             try
             {
                 var redirectUrl = _linkGenerator.PaymentRequestLink(id, Request.Scheme, Request.Host, Request.PathBase);
-                var newInvoiceId = (await _InvoiceController.CreateInvoiceCore(new CreateInvoiceRequest()
+                var newInvoiceId = (await _InvoiceService.CreateInvoiceCore(new CreateInvoiceRequest()
                 {
                     OrderId = $"{PaymentRequestRepository.GetOrderIdForPaymentRequest(id)}",
                     Currency = blob.Currency,

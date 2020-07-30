@@ -11,6 +11,7 @@ using BTCPayServer.ModelBinders;
 using BTCPayServer.Models;
 using BTCPayServer.Models.AppViewModels;
 using BTCPayServer.Services.Apps;
+using BTCPayServer.Services.Invoices;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Identity;
@@ -24,19 +25,19 @@ namespace BTCPayServer.Controllers
     {
         public AppsPublicController(AppService appService,
             BTCPayServerOptions btcPayServerOptions,
-            InvoiceController invoiceController,
-            UserManager<ApplicationUser> userManager)
+            UserManager<ApplicationUser> userManager,
+            InvoiceService invoiceService)
         {
             _AppService = appService;
             _BtcPayServerOptions = btcPayServerOptions;
-            _InvoiceController = invoiceController;
             _UserManager = userManager;
+            _InvoiceService = invoiceService;
         }
 
         private readonly AppService _AppService;
         private readonly BTCPayServerOptions _BtcPayServerOptions;
-        private readonly InvoiceController _InvoiceController;
         private readonly UserManager<ApplicationUser> _UserManager;
+        private readonly InvoiceService _InvoiceService;
 
         [HttpGet]
         [Route("/apps/{appId}/pos/{viewType?}")]
@@ -173,7 +174,7 @@ namespace BTCPayServer.Controllers
             var store = await _AppService.GetStore(app);
             try
             {
-                var invoice = await _InvoiceController.CreateInvoiceCore(new CreateInvoiceRequest()
+                var invoice = await _InvoiceService.CreateInvoiceCore(new CreateInvoiceRequest()
                 {
                     ItemCode = choice?.Id,
                     ItemDesc = title,
@@ -315,7 +316,7 @@ namespace BTCPayServer.Controllers
 
             try
             {
-                var invoice = await _InvoiceController.CreateInvoiceCore(new CreateInvoiceRequest()
+                var invoice = await _InvoiceService.CreateInvoiceCore(new CreateInvoiceRequest()
                 {
                     OrderId = AppService.GetCrowdfundOrderId(appId),
                     Currency = settings.TargetCurrency,
