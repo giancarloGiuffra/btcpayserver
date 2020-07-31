@@ -47,7 +47,7 @@ namespace BTCPayServer.Services
             get; set;
         }
 
-        public bool IsDevelopping
+        public bool IsDeveloping
         {
             get
             {

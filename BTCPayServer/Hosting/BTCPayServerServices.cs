@@ -234,6 +234,7 @@ namespace BTCPayServer.Hosting
             services.AddScoped<IAuthorizationHandler, CookieAuthorizationHandler>();
             services.AddScoped<IAuthorizationHandler, BitpayAuthorizationHandler>();
 
+            services.AddSingleton<IVersionFetcher, GithubVersionFetcher>();
             services.AddSingleton<IHostedService, NewVersionCheckerHostedService>();
             services.AddSingleton<INotificationHandler, NewVersionNotification.Handler>();
 
@@ -281,7 +282,7 @@ namespace BTCPayServer.Hosting
             {
                 var btcPayEnv = provider.GetService<BTCPayServerEnvironment>();
                 var rateLimits = new RateLimitService();
-                if (btcPayEnv.IsDevelopping)
+                if (btcPayEnv.IsDeveloping)
                 {
                     rateLimits.SetZone($"zone={ZoneLimits.Login} rate=1000r/min burst=100 nodelay");
                     rateLimits.SetZone($"zone={ZoneLimits.Register} rate=1000r/min burst=100 nodelay");
